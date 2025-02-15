@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Search } from "lucide-react";
 import { Recipe } from "@/types/recipe";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { useToast } from "@/components/ui/use-toast";
 
 const CATEGORIES = [
   "הכל",
@@ -28,6 +29,7 @@ const Index = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [selectedCategory, setSelectedCategory] = useState("הכל");
+  const { toast } = useToast();
 
   const handleImport = (importedRecipe: Omit<Recipe, "id">) => {
     const newRecipe = {
@@ -35,6 +37,14 @@ const Index = () => {
       id: Date.now().toString(),
     };
     setRecipes((prev) => [...prev, newRecipe]);
+  };
+
+  const handleDeleteRecipe = (id: string) => {
+    setRecipes((prev) => prev.filter(recipe => recipe.id !== id));
+    toast({
+      title: "המתכון נמחק",
+      description: "המתכון הוסר מספר המתכונים שלך",
+    });
   };
 
   const filteredRecipes = recipes.filter((recipe) => {
@@ -131,6 +141,7 @@ const Index = () => {
         recipe={selectedRecipe}
         open={!!selectedRecipe}
         onClose={() => setSelectedRecipe(null)}
+        onDelete={handleDeleteRecipe}
       />
     </div>
   );
