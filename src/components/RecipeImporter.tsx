@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { FirecrawlService } from "@/utils/FirecrawlService";
+import { parseRecipeData } from "@/utils/recipeParser";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 
@@ -31,13 +32,13 @@ export function RecipeImporter({ onImport }: { onImport: (recipe: ImportedRecipe
       const result = await FirecrawlService.crawlWebsite(url);
       
       if (result.success && result.data) {
-        // Process the crawled data to extract recipe information
-        const recipeData = processRecipeData(result.data);
+        const recipeData = parseRecipeData(result.data);
         onImport(recipeData);
         toast({
           title: "מתכון יובא בהצלחה",
           description: "המתכון נוסף לספר המתכונים שלך",
         });
+        setUrl("");
       } else {
         toast({
           title: "שגיאה",
@@ -56,19 +57,6 @@ export function RecipeImporter({ onImport }: { onImport: (recipe: ImportedRecipe
       setIsLoading(false);
       setProgress(100);
     }
-  };
-
-  const processRecipeData = (data: any): ImportedRecipe => {
-    // This is a placeholder implementation
-    // You'll need to implement proper parsing logic based on the crawled data
-    return {
-      title: data.title || "מתכון חדש",
-      ingredients: data.ingredients || [],
-      instructions: data.instructions || [],
-      image: data.image,
-      category: data.category || "כללי",
-      prepTime: data.prepTime,
-    };
   };
 
   return (

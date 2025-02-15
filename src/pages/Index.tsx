@@ -1,6 +1,7 @@
 
 import { useState } from "react";
 import { RecipeCard } from "@/components/RecipeCard";
+import { RecipeDialog } from "@/components/RecipeDialog";
 import { RecipeImporter } from "@/components/RecipeImporter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +21,7 @@ interface Recipe {
 const Index = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
 
   const handleImport = (importedRecipe: Omit<Recipe, "id">) => {
     const newRecipe = {
@@ -70,6 +72,7 @@ const Index = () => {
                   image={recipe.image}
                   category={recipe.category}
                   prepTime={recipe.prepTime}
+                  onClick={() => setSelectedRecipe(recipe)}
                 />
               ))}
             </div>
@@ -92,6 +95,12 @@ const Index = () => {
           )}
         </ScrollArea>
       </div>
+
+      <RecipeDialog
+        recipe={selectedRecipe}
+        open={!!selectedRecipe}
+        onClose={() => setSelectedRecipe(null)}
+      />
     </div>
   );
 };
