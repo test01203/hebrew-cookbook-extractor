@@ -15,6 +15,8 @@ interface ImportedRecipe {
   image?: string;
   category?: string;
   prepTime?: string;
+  source: string;
+  sourceUrl: string;
 }
 
 export function RecipeImporter({ onImport }: { onImport: (recipe: ImportedRecipe) => void }) {
@@ -32,7 +34,7 @@ export function RecipeImporter({ onImport }: { onImport: (recipe: ImportedRecipe
       const result = await FirecrawlService.crawlWebsite(url);
       
       if (result.success && result.data) {
-        const recipeData = parseRecipeData(result.data);
+        const recipeData = parseRecipeData(result.data, url);
         onImport(recipeData);
         toast({
           title: "מתכון יובא בהצלחה",

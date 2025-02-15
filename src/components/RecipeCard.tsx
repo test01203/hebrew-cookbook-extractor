@@ -6,11 +6,12 @@ interface RecipeCardProps {
   title: string;
   image: string;
   category: string;
+  source: string;
   prepTime?: string;
   onClick?: () => void;
 }
 
-export function RecipeCard({ title, image, category, prepTime, onClick }: RecipeCardProps) {
+export function RecipeCard({ title, image, category, source, prepTime, onClick }: RecipeCardProps) {
   return (
     <Card 
       className="recipe-card group cursor-pointer animate-fade-up"
@@ -28,9 +29,12 @@ export function RecipeCard({ title, image, category, prepTime, onClick }: Recipe
             {category}
           </Badge>
           <h3 className="text-lg font-semibold line-clamp-2">{title}</h3>
-          {prepTime && (
-            <p className="mt-1 text-sm text-gray-200">{prepTime}</p>
-          )}
+          <div className="flex items-center justify-between mt-2">
+            {prepTime && (
+              <p className="text-sm text-gray-200">{prepTime}</p>
+            )}
+            <p className="text-xs text-gray-300">{source}</p>
+          </div>
         </div>
       </div>
     </Card>
