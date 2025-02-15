@@ -19,30 +19,20 @@ interface CrawlStatusResponse {
 type CrawlResponse = CrawlStatusResponse | ErrorResponse;
 
 export class FirecrawlService {
-  private static API_KEY_STORAGE_KEY = 'firecrawl_api_key';
+  private static API_KEY = 'fc-c60f659436cb4cbe849bf8a9125223eb';
   private static firecrawlApp: FirecrawlApp | null = null;
 
-  static saveApiKey(apiKey: string): void {
-    localStorage.setItem(this.API_KEY_STORAGE_KEY, apiKey);
-    this.firecrawlApp = new FirecrawlApp({ apiKey });
-  }
-
-  static getApiKey(): string | null {
-    return localStorage.getItem(this.API_KEY_STORAGE_KEY);
+  private static getInstance(): FirecrawlApp {
+    if (!this.firecrawlApp) {
+      this.firecrawlApp = new FirecrawlApp({ apiKey: this.API_KEY });
+    }
+    return this.firecrawlApp;
   }
 
   static async crawlWebsite(url: string): Promise<{ success: boolean; error?: string; data?: any }> {
-    const apiKey = this.getApiKey();
-    if (!apiKey) {
-      return { success: false, error: 'API key not found' };
-    }
-
     try {
-      if (!this.firecrawlApp) {
-        this.firecrawlApp = new FirecrawlApp({ apiKey });
-      }
-
-      const crawlResponse = await this.firecrawlApp.crawlUrl(url, {
+      const app = this.getInstance();
+      const crawlResponse = await app.crawlUrl(url, {
         limit: 1,
         scrapeOptions: {
           formats: ['markdown', 'html'],

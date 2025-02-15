@@ -33,6 +33,11 @@ const Index = () => {
     recipe.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const focusImportInput = () => {
+    const input = document.querySelector('input[type="url"]') as HTMLInputElement | null;
+    input?.focus();
+  };
+
   return (
     <div className="container mx-auto px-4 py-8 min-h-screen">
       <div className="max-w-4xl mx-auto space-y-8">
@@ -78,7 +83,7 @@ const Index = () => {
               {!searchTerm && (
                 <Button
                   variant="outline"
-                  onClick={() => document.querySelector('input[type="url"]')?.focus()}
+                  onClick={focusImportInput}
                 >
                   ייבא מתכון ראשון
                 </Button>
