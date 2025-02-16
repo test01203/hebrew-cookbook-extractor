@@ -4,13 +4,25 @@ import { useState, useEffect } from "react";
 import { Recipe } from "@/types/recipe";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, ExternalLink, Edit } from "lucide-react";
+import { ChevronRight, ExternalLink, Edit, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useToast } from "@/components/ui/use-toast";
 
 export default function RecipePage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [recipe, setRecipe] = useState<Recipe | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
+  const [showDeleteAlert, setShowDeleteAlert] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     const savedRecipes = localStorage.getItem('recipes');
@@ -24,8 +36,25 @@ export default function RecipePage() {
   }, [id]);
 
   const handleEdit = () => {
-    setIsEditing(true);
-    // TODO: להוסיף טופס עריכה
+    // TODO: לפתוח טופס עריכה
+    toast({
+      title: "בקרוב...",
+      description: "אפשרות העריכה תהיה זמינה בקרוב",
+    });
+  };
+
+  const handleDelete = () => {
+    const savedRecipes = localStorage.getItem('recipes');
+    if (savedRecipes) {
+      const recipes = JSON.parse(savedRecipes);
+      const updatedRecipes = recipes.filter((r: Recipe) => r.id !== id);
+      localStorage.setItem('recipes', JSON.stringify(updatedRecipes));
+      toast({
+        title: "המתכון נמחק",
+        description: "המתכון הוסר בהצלחה מהאוסף שלך",
+      });
+      navigate('/');
+    }
   };
 
   if (!recipe) {
@@ -50,13 +79,23 @@ export default function RecipePage() {
             <ChevronRight className="ml-2 h-4 w-4" />
             חזרה לכל המתכונים
           </Button>
-          <Button
-            variant="outline"
-            onClick={handleEdit}
-          >
-            <Edit className="ml-2 h-4 w-4" />
-            ערוך מתכון
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={handleEdit}
+            >
+              <Edit className="ml-2 h-4 w-4" />
+              ערוך מתכון
+            </Button>
+            <Button
+              variant="outline"
+              className="text-destructive hover:text-destructive-foreground hover:bg-destructive"
+              onClick={() => setShowDeleteAlert(true)}
+            >
+              <Trash2 className="ml-2 h-4 w-4" />
+              מחק מתכון
+            </Button>
+          </div>
         </div>
 
         <div className="space-y-6">
@@ -99,25 +138,16 @@ export default function RecipePage() {
             </div>
           )}
 
-          <div className="flex flex-col gap-2 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <span>מקור:</span>
-              <a 
-                href={recipe.sourceUrl} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 hover:text-foreground"
-              >
-                {recipe.source}
-                <ExternalLink size={14} />
-              </a>
-            </div>
-            {recipe.author && (
-              <div>מאת: {recipe.author}</div>
-            )}
-            {recipe.credits && (
-              <div>קרדיט: {recipe.credits}</div>
-            )}
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <a 
+              href={recipe.sourceUrl} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 hover:text-foreground"
+            >
+              {recipe.sourceUrl}
+              <ExternalLink size={14} />
+            </a>
           </div>
 
           <div className="space-y-8">
@@ -145,6 +175,26 @@ export default function RecipePage() {
           </div>
         </div>
       </div>
+
+      <AlertDialog open={showDeleteAlert} onOpenChange={setShowDeleteAlert}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>האם למחוק את המתכון?</AlertDialogTitle>
+            <AlertDialogDescription>
+              פעולה זו תמחק לצמיתות את המתכון מספר המתכונים שלך.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDelete}
+            >
+              מחיקה
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
