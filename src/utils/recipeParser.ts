@@ -27,6 +27,54 @@ const determineCategory = (title: string, content: string): string => {
   return 'כללי';
 };
 
+const extractInstructions = (doc: Document): string[] => {
+  const instructions: string[] = [];
+  
+  // חיפוש על פי כל הסלקטורים האפשריים
+  const possibleSelectors = [
+    '.preparation li',
+    '.instructions li',
+    '[itemprop="recipeInstructions"] li',
+    '.recipe-instructions li',
+    '.method li',
+    '.steps li',
+    'ol li',  // אם אין סלקטור ספציפי, ננסה למצוא רשימה ממוספרת
+    '.preparation p',
+    '.instructions p',
+    '[itemprop="recipeInstructions"] p',
+    '.recipe-instructions p',
+    '.method p',
+    '.steps p'
+  ];
+
+  // עבור על כל הסלקטורים עד שנמצא תוצאות
+  for (const selector of possibleSelectors) {
+    const elements = doc.querySelectorAll(selector);
+    if (elements.length > 0) {
+      elements.forEach(el => {
+        const text = el.textContent?.trim();
+        if (text && text.length > 5) { // נוודא שזה לא טקסט ריק או קצר מדי
+          instructions.push(text);
+        }
+      });
+      if (instructions.length > 0) break;
+    }
+  }
+
+  // אם לא מצאנו הוראות הכנה, ננסה למצוא טקסט שמתחיל במספרים
+  if (instructions.length === 0) {
+    const allParagraphs = doc.querySelectorAll('p');
+    allParagraphs.forEach(p => {
+      const text = p.textContent?.trim();
+      if (text && /^\d+\.?\s/.test(text)) {
+        instructions.push(text);
+      }
+    });
+  }
+
+  return instructions;
+};
+
 export const parseRecipeData = (rawData: RawRecipeData, sourceUrl: string) => {
   try {
     const htmlContent = rawData.data[0]?.html || '';
@@ -42,17 +90,13 @@ export const parseRecipeData = (rawData: RawRecipeData, sourceUrl: string) => {
 
     // Extract ingredients
     const ingredients: string[] = [];
-    doc.querySelectorAll('.ingredient, .ingredients li, [itemprop="recipeIngredient"]').forEach(el => {
+    doc.querySelectorAll('.ingredient, .ingredients li, [itemprop="recipeIngredient"], .recipe-ingredients li').forEach(el => {
       const text = el.textContent?.trim();
       if (text) ingredients.push(text);
     });
 
-    // Extract instructions
-    const instructions: string[] = [];
-    doc.querySelectorAll('.instruction, .instructions li, [itemprop="recipeInstructions"]').forEach(el => {
-      const text = el.textContent?.trim();
-      if (text) instructions.push(text);
-    });
+    // Extract instructions using the new function
+    const instructions = extractInstructions(doc);
 
     // Extract image
     const image = doc.querySelector('img[itemprop="image"]')?.getAttribute('src') ||
