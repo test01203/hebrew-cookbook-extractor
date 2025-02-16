@@ -1,21 +1,24 @@
 
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { useNavigate } from "react-router-dom";
 
 interface RecipeCardProps {
+  id: string;
   title: string;
   image: string;
   category: string;
   source: string;
   prepTime?: string;
-  onClick?: () => void;
 }
 
-export function RecipeCard({ title, image, category, source, prepTime, onClick }: RecipeCardProps) {
+export function RecipeCard({ id, title, image, category, source, prepTime }: RecipeCardProps) {
+  const navigate = useNavigate();
+
   return (
     <Card 
       className="recipe-card group cursor-pointer animate-fade-up"
-      onClick={onClick}
+      onClick={() => navigate(`/recipe/${id}`)}
     >
       <div className="relative h-full">
         <img

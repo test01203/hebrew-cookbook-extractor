@@ -1,7 +1,6 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { RecipeCard } from "@/components/RecipeCard";
-import { RecipeDialog } from "@/components/RecipeDialog";
 import { RecipeImporter } from "@/components/RecipeImporter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,9 +26,21 @@ const CATEGORIES = [
 const Index = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [selectedCategory, setSelectedCategory] = useState("הכל");
   const { toast } = useToast();
+
+  // Load recipes from localStorage on initial mount
+  useEffect(() => {
+    const savedRecipes = localStorage.getItem('recipes');
+    if (savedRecipes) {
+      setRecipes(JSON.parse(savedRecipes));
+    }
+  }, []);
+
+  // Save recipes to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('recipes', JSON.stringify(recipes));
+  }, [recipes]);
 
   const handleImport = (importedRecipe: Omit<Recipe, "id">) => {
     const newRecipe = {
@@ -37,13 +48,9 @@ const Index = () => {
       id: Date.now().toString(),
     };
     setRecipes((prev) => [...prev, newRecipe]);
-  };
-
-  const handleDeleteRecipe = (id: string) => {
-    setRecipes((prev) => prev.filter(recipe => recipe.id !== id));
     toast({
-      title: "המתכון נמחק",
-      description: "המתכון הוסר מספר המתכונים שלך",
+      title: "המתכון נוסף בהצלחה",
+      description: "המתכון נשמר בספר המתכונים שלך",
     });
   };
 
@@ -108,12 +115,12 @@ const Index = () => {
               {filteredRecipes.map((recipe) => (
                 <RecipeCard
                   key={recipe.id}
+                  id={recipe.id}
                   title={recipe.title}
                   image={recipe.image}
                   category={recipe.category}
                   source={recipe.source}
                   prepTime={recipe.prepTime}
-                  onClick={() => setSelectedRecipe(recipe)}
                 />
               ))}
             </div>
@@ -136,13 +143,6 @@ const Index = () => {
           )}
         </ScrollArea>
       </div>
-
-      <RecipeDialog
-        recipe={selectedRecipe}
-        open={!!selectedRecipe}
-        onClose={() => setSelectedRecipe(null)}
-        onDelete={handleDeleteRecipe}
-      />
     </div>
   );
 };
