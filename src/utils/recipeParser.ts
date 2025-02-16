@@ -31,36 +31,45 @@ const extractInstructions = (doc: Document): string[] => {
   const instructions: string[] = [];
   
   // חיפוש בתוך אזורי ההוראות הספציפיים
-  const instructionWrappers = doc.querySelectorAll('.preparation, .instructions, [itemprop="recipeInstructions"], .recipe-instructions, .method, .steps');
+  const instructionWrappers = doc.querySelectorAll('.preparation, .instructions, [itemprop="recipeInstructions"], .recipe-instructions, .method, .steps, ol');
   
   for (const wrapper of instructionWrappers) {
     const items = wrapper.querySelectorAll('li, p');
+    let foundValidInstructions = false;
+    
     items.forEach(item => {
       const text = item.textContent?.trim();
-      if (text && text.length > 5 && !text.includes('עמוד הבית') && !text.includes('קטגוריות')) {
+      if (text && text.length > 5 && 
+          !text.includes('עמוד הבית') && 
+          !text.includes('קטגוריות') &&
+          !text.includes('חפש') &&
+          !text.includes('תפריט')) {
         // נקה מספרים מתחילת השורה
         const cleanText = text.replace(/^\d+[\.\)]\s*/, '');
         if (!instructions.includes(cleanText)) {
           instructions.push(cleanText);
+          foundValidInstructions = true;
         }
       }
     });
     
-    if (instructions.length > 0) break;
+    if (foundValidInstructions) break;
   }
 
   // אם לא מצאנו הוראות, חפש פסקאות עם מספרים
   if (instructions.length === 0) {
-    const relevantParagraphs = Array.from(doc.querySelectorAll('p'))
-      .filter(p => {
-        const text = p.textContent?.trim() || '';
-        return text.length > 5 && 
-               /^\d+[\.\)]\s/.test(text) && 
-               !text.includes('עמוד הבית') && 
-               !text.includes('קטגוריות');
-      });
+    const allParagraphs = Array.from(doc.querySelectorAll('p'));
+    const numberedParagraphs = allParagraphs.filter(p => {
+      const text = p.textContent?.trim() || '';
+      return text.length > 5 && 
+             /^\d+[\.\)]\s/.test(text) && 
+             !text.includes('עמוד הבית') && 
+             !text.includes('קטגוריות') &&
+             !text.includes('חפש') &&
+             !text.includes('תפריט');
+    });
 
-    relevantParagraphs.forEach(p => {
+    numberedParagraphs.forEach(p => {
       const text = p.textContent?.trim();
       if (text) {
         const cleanText = text.replace(/^\d+[\.\)]\s*/, '');
@@ -133,10 +142,11 @@ export const parseRecipeData = (rawData: RawRecipeData, sourceUrl: string) => {
                  'מתכון חדש';
 
     // Extract ingredients without duplicates
-    const ingredients = extractIngredients(doc);
+    const ingredients = Array.from(new Set(extractIngredients(doc)));
 
     // Extract instructions
     const instructions = extractInstructions(doc);
+    console.log('Extracted instructions:', instructions); // Debug log
 
     // Extract image with fallback options
     let image = doc.querySelector('img[itemprop="image"]')?.getAttribute('src') ||
@@ -144,7 +154,11 @@ export const parseRecipeData = (rawData: RawRecipeData, sourceUrl: string) => {
     
     // נקה את כתובת התמונה
     if (image && !image.startsWith('http')) {
-      image = new URL(image, sourceUrl).href;
+      try {
+        image = new URL(image, sourceUrl).href;
+      } catch {
+        image = '/placeholder.svg';
+      }
     }
     
     if (!image) {
