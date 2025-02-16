@@ -9,4 +9,8 @@ export interface Recipe {
   prepTime?: string;
   ingredients: string[];
   instructions: string[];
+  youtubeUrl?: string;
+  author?: string;
+  credits?: string;
+  siteCategories: string[];
 }

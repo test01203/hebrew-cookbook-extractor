@@ -4,22 +4,29 @@ import { useState, useEffect } from "react";
 import { Recipe } from "@/types/recipe";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, ExternalLink } from "lucide-react";
+import { ChevronRight, ExternalLink, Edit } from "lucide-react";
 
 export default function RecipePage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [recipe, setRecipe] = useState<Recipe | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
-    // Get recipes from localStorage
     const savedRecipes = localStorage.getItem('recipes');
     if (savedRecipes) {
       const recipes = JSON.parse(savedRecipes);
       const foundRecipe = recipes.find((r: Recipe) => r.id === id);
-      setRecipe(foundRecipe);
+      if (foundRecipe) {
+        setRecipe(foundRecipe);
+      }
     }
   }, [id]);
+
+  const handleEdit = () => {
+    setIsEditing(true);
+    // TODO: להוסיף טופס עריכה
+  };
 
   if (!recipe) {
     return (
@@ -35,18 +42,35 @@ export default function RecipePage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-4xl mx-auto space-y-8">
-        <Button
-          variant="ghost"
-          className="mb-4"
-          onClick={() => navigate('/')}
-        >
-          <ChevronRight className="ml-2 h-4 w-4" />
-          חזרה לכל המתכונים
-        </Button>
+        <div className="flex justify-between items-center">
+          <Button
+            variant="ghost"
+            onClick={() => navigate('/')}
+          >
+            <ChevronRight className="ml-2 h-4 w-4" />
+            חזרה לכל המתכונים
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleEdit}
+          >
+            <Edit className="ml-2 h-4 w-4" />
+            ערוך מתכון
+          </Button>
+        </div>
 
         <div className="space-y-6">
           <div className="space-y-4">
             <h1 className="text-4xl font-bold">{recipe.title}</h1>
+            
+            {recipe.siteCategories.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {recipe.siteCategories.map((cat, index) => (
+                  <Badge key={index} variant="outline">{cat}</Badge>
+                ))}
+              </div>
+            )}
+            
             <div className="flex items-center gap-2">
               <Badge variant="secondary">{recipe.category}</Badge>
               {recipe.prepTime && (
@@ -63,17 +87,37 @@ export default function RecipePage() {
             />
           </div>
 
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>מקור:</span>
-            <a 
-              href={recipe.sourceUrl} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 hover:text-foreground"
-            >
-              {recipe.source}
-              <ExternalLink size={14} />
-            </a>
+          {recipe.youtubeUrl && (
+            <div className="relative aspect-[16/9] w-full overflow-hidden rounded-lg">
+              <iframe
+                src={recipe.youtubeUrl}
+                title="סרטון מתכון"
+                className="w-full h-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <span>מקור:</span>
+              <a 
+                href={recipe.sourceUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 hover:text-foreground"
+              >
+                {recipe.source}
+                <ExternalLink size={14} />
+              </a>
+            </div>
+            {recipe.author && (
+              <div>מאת: {recipe.author}</div>
+            )}
+            {recipe.credits && (
+              <div>קרדיט: {recipe.credits}</div>
+            )}
           </div>
 
           <div className="space-y-8">
