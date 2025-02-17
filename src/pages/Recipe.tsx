@@ -1,4 +1,3 @@
-
 import { useParams, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { Recipe } from "@/types/recipe";
@@ -22,6 +21,7 @@ export default function RecipePage() {
   const navigate = useNavigate();
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [showDeleteAlert, setShowDeleteAlert] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -36,11 +36,20 @@ export default function RecipePage() {
   }, [id]);
 
   const handleEdit = () => {
-    // TODO: לפתוח טופס עריכה
-    toast({
-      title: "בקרוב...",
-      description: "אפשרות העריכה תהיה זמינה בקרוב",
-    });
+    setShowEditDialog(true);
+  };
+
+  const handleSaveEdit = (updatedRecipe: Recipe) => {
+    const savedRecipes = localStorage.getItem('recipes');
+    if (savedRecipes) {
+      const recipes = JSON.parse(savedRecipes);
+      const updatedRecipes = recipes.map((r: Recipe) =>
+        r.id === id ? updatedRecipe : r
+      );
+      localStorage.setItem('recipes', JSON.stringify(updatedRecipes));
+      setRecipe(updatedRecipe);
+      setShowEditDialog(false);
+    }
   };
 
   const handleDelete = () => {
@@ -175,6 +184,15 @@ export default function RecipePage() {
           </div>
         </div>
       </div>
+
+      {recipe && showEditDialog && (
+        <RecipeEditDialog
+          recipe={recipe}
+          open={showEditDialog}
+          onClose={() => setShowEditDialog(false)}
+          onSave={handleSaveEdit}
+        />
+      )}
 
       <AlertDialog open={showDeleteAlert} onOpenChange={setShowDeleteAlert}>
         <AlertDialogContent>
