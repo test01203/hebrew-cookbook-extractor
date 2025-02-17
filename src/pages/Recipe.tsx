@@ -15,6 +15,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/components/ui/use-toast";
+import { RecipeEditDialog } from "@/components/RecipeEditDialog";
 
 export default function RecipePage() {
   const { id } = useParams();
