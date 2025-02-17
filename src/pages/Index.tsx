@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { RecipeCard } from "@/components/RecipeCard";
 import { RecipeImporter } from "@/components/RecipeImporter";
@@ -79,23 +78,21 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-[#f7f7f7]">
-      <div className="relative h-[40vh] bg-gradient-to-b from-purple-50 to-purple-100 flex items-center justify-center">
+      <div className="relative h-[45vh] bg-gradient-to-b from-purple-50 to-purple-100 flex items-center justify-center">
         <div className="text-center space-y-6 px-4 max-w-3xl mx-auto">
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900">ספר המתכונים שלי</h1>
           <p className="text-xl text-gray-600">
             ייבא וארגן את המתכונים האהובים עליך במקום אחד
           </p>
-          <div className="grid gap-4">
+          <div className="grid gap-4 mb-12">
             <RecipeImporter onImport={handleImport} />
-            <div className="relative">
-              <RecipeSourceImporter onImport={handleBulkImport} />
-            </div>
+            <RecipeSourceImporter onImport={handleBulkImport} />
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-8 -mt-8">
-        <div className="bg-white rounded-lg shadow-lg p-6 space-y-6">
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="bg-white rounded-lg shadow-lg p-6 space-y-6 -mt-12">
           <div className="flex flex-col gap-4">
             <div className="relative">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
