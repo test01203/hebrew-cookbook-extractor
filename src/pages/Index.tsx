@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { RecipeCard } from "@/components/RecipeCard";
 import { RecipeImporter } from "@/components/RecipeImporter";
+import { RecipeSourceImporter } from "@/components/RecipeSourceImporter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
