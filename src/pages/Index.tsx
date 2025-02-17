@@ -53,6 +53,19 @@ const Index = () => {
     });
   };
 
+  const handleBulkImport = (importedRecipes: Omit<Recipe, "id">[]) => {
+    const newRecipes = importedRecipes.map(recipe => ({
+      ...recipe,
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+    }));
+    
+    setRecipes(prev => [...prev, ...newRecipes]);
+    toast({
+      title: "המתכונים נוספו בהצלחה",
+      description: `${newRecipes.length} מתכונים נוספו לספר המתכונים שלך`,
+    });
+  };
+
   const filteredRecipes = recipes.filter((recipe) => {
     const matchesSearch = recipe.title.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === "הכל" || recipe.category === selectedCategory;
@@ -72,7 +85,12 @@ const Index = () => {
           <p className="text-xl text-gray-600">
             ייבא וארגן את המתכונים האהובים עליך במקום אחד
           </p>
-          <RecipeImporter onImport={handleImport} />
+          <div className="grid gap-4">
+            <RecipeImporter onImport={handleImport} />
+            <div className="relative">
+              <RecipeSourceImporter onImport={handleBulkImport} />
+            </div>
+          </div>
         </div>
       </div>
 
