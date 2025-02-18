@@ -1,3 +1,4 @@
+
 interface RawRecipeData {
   data: any[];
   status: string;
@@ -6,7 +7,7 @@ interface RawRecipeData {
 const CATEGORIES_MAP: { [key: string]: string[] } = {
   'עוגות': ['עוגה', 'עוגות', 'עוגת', 'טורט'],
   'עוגיות': ['עוגיות', 'עוגיה', 'ביסקוטי'],
-  'לחמים': ['לחם', 'ח��ה', 'בייגל', 'פ��תה'],
+  'לחמים': ['לחם', 'חלה', 'בייגל', 'פיתה'],
   'קינוחים': ['קינוח', 'מוס', 'פודינג', 'קרם'],
   'מתוקים': ['שוקולד', 'ממתק', 'פרלין', 'טראפל'],
   'מאפים': ['מאפה', 'בורקס', 'פשטידה', 'קיש'],
@@ -26,56 +27,24 @@ const determineCategory = (title: string, content: string): string => {
   return 'כללי';
 };
 
-const extractTitle = (doc: Document): string => {
-  const wpImage = doc.querySelector('.wp-post-image, .attachment-tinysalt_large');
-  if (wpImage instanceof HTMLImageElement && wpImage.alt) {
-    return wpImage.alt.trim();
-  }
-
-  const h1 = doc.querySelector('h1');
-  if (h1?.textContent) {
-    return h1.textContent.trim();
-  }
-
-  return 'מתכון חדש';
-};
-
-const extractImage = (doc: Document): string => {
-  const wpImage = doc.querySelector('.wp-post-image, .attachment-tinysalt_large');
-  if (wpImage instanceof HTMLImageElement) {
-    if (wpImage.srcset) {
-      // נסה לקחת ��ת התמונה הכי גדולה מה-srcset
-      const srcsetUrls = wpImage.srcset.split(',')
-        .map(s => s.trim().split(' ')[0])
-        .filter(Boolean);
-      if (srcsetUrls.length > 0) {
-        return srcsetUrls[0];
-      }
-    }
-    return wpImage.src;
-  }
-
-  const featuredImage = doc.querySelector('.featured-media-section img');
-  if (featuredImage instanceof HTMLImageElement) {
-    return featuredImage.src;
-  }
-
-  return '/placeholder.svg';
-};
-
 interface IngredientSection {
   title: string;
   items: string[];
 }
 
-const extractIngredients = (doc: Document): IngredientSection[] => {
+const extractIngredients = (doc: Document): string[] => {
   const sections: IngredientSection[] = [];
   let currentSection: IngredientSection = {
     title: 'מצרכים',
     items: []
   };
   
-  const paragraphs = doc.querySelectorAll('p[dir="rtl"]');
+  // מצא את כל הפסקאות בעברית
+  const paragraphs = Array.from(doc.querySelectorAll('p')).filter(p => {
+    const text = p.textContent?.trim() || '';
+    return text.match(/[\u0590-\u05FF]/) && text.length > 0;
+  });
+  
   let inIngredientsSection = false;
   
   for (const p of paragraphs) {
@@ -84,7 +53,7 @@ const extractIngredients = (doc: Document): IngredientSection[] => {
     // בדוק אם זו כותרת חדשה
     if (text.match(/^(מצרכים|למשרה|לרוטב|לציפוי|לקישוט|למילוי)/)) {
       if (currentSection.items.length > 0) {
-        sections.push(currentSection);
+        sections.push({...currentSection});
       }
       currentSection = {
         title: text,
@@ -108,18 +77,24 @@ const extractIngredients = (doc: Document): IngredientSection[] => {
     if (text.includes('איך מכינים')) {
       inIngredientsSection = false;
       if (currentSection.items.length > 0) {
-        sections.push(currentSection);
+        sections.push({...currentSection});
       }
       break;
     }
   }
   
   // הוסף את הסקציה האחרונה אם יש בה פריטים
-  if (currentSection.items.length > 0 && !sections.includes(currentSection)) {
-    sections.push(currentSection);
+  if (currentSection.items.length > 0) {
+    sections.push({...currentSection});
   }
-  
-  return sections;
+
+  // שטח את כל המצרכים לרשימה אחת עם כותרות
+  return sections.flatMap(section => {
+    if (section.title === 'מצרכים') {
+      return section.items;
+    }
+    return [section.title + ':', ...section.items];
+  });
 };
 
 const extractInstructions = (doc: Document): string[] => {
@@ -151,14 +126,68 @@ const extractInstructions = (doc: Document): string[] => {
   return instructions;
 };
 
+const extractTitle = (doc: Document): string => {
+  // נסה למצוא את הכותרת מתמונה ראשית
+  const mainImage = doc.querySelector('.wp-post-image, .attachment-tinysalt_large');
+  if (mainImage instanceof HTMLImageElement && mainImage.alt) {
+    const altText = mainImage.alt.trim();
+    if (altText && altText.length > 2) {
+      return altText;
+    }
+  }
+
+  // נסה למצוא כותרת מ-h1
+  const h1 = doc.querySelector('h1');
+  if (h1?.textContent) {
+    const h1Text = h1.textContent.trim();
+    if (h1Text && h1Text.length > 2) {
+      return h1Text;
+    }
+  }
+
+  // נסה למצוא כותרת מתמונה ראשית בסקציית המדיה
+  const featuredImage = doc.querySelector('.featured-media-section img');
+  if (featuredImage instanceof HTMLImageElement && featuredImage.alt) {
+    const featuredAlt = featuredImage.alt.trim();
+    if (featuredAlt && featuredAlt.length > 2) {
+      return featuredAlt;
+    }
+  }
+
+  return 'מתכון חדש';
+};
+
+const extractImage = (doc: Document): string => {
+  // נסה למצוא את התמונה הראשית
+  const wpImage = doc.querySelector('.wp-post-image, .attachment-tinysalt_large');
+  if (wpImage instanceof HTMLImageElement) {
+    // אם יש srcset, קח את התמונה הגדולה ביותר
+    if (wpImage.srcset) {
+      const srcsetUrls = wpImage.srcset.split(',')
+        .map(s => s.trim().split(' ')[0])
+        .filter(Boolean);
+      if (srcsetUrls.length > 0) {
+        return srcsetUrls[0];
+      }
+    }
+    return wpImage.src;
+  }
+
+  // נסה למצוא תמונה בסקציית המדיה
+  const featuredImage = doc.querySelector('.featured-media-section img');
+  if (featuredImage instanceof HTMLImageElement) {
+    return featuredImage.src;
+  }
+
+  return '/placeholder.svg';
+};
+
 const extractYoutubeUrl = (doc: Document): string | undefined => {
-  // חיפוש iframe של יוטיוב
   const youtubeIframe = doc.querySelector('iframe[src*="youtube.com"]');
   if (youtubeIframe) {
     return youtubeIframe.getAttribute('src') || undefined;
   }
 
-  // חיפוש קישור ליוטיוב
   const youtubeLink = doc.querySelector('a[href*="youtube.com"]');
   return youtubeLink?.getAttribute('href');
 };
@@ -176,30 +205,22 @@ const getCredits = (doc: Document): { author?: string, credits?: string } => {
 
 export const parseRecipeData = (rawData: RawRecipeData, sourceUrl: string) => {
   try {
+    console.log('Starting recipe parsing...');
     const htmlContent = rawData.data[0]?.html || '';
     const parser = new DOMParser();
     const doc = parser.parseFromString(htmlContent, 'text/html');
     
     const title = extractTitle(doc);
-    const image = extractImage(doc);
-    const ingredientSections = extractIngredients(doc);
+    console.log('Extracted title:', title);
     
-    // שטח את כל המצרכים לרשימה אחת עם כותרות
-    const ingredients = ingredientSections.flatMap(section => {
-      if (section.title === 'מצרכים') {
-        return section.items;
-      }
-      return [section.title + ':', ...section.items];
-    });
+    const image = extractImage(doc);
+    console.log('Extracted image:', image);
+    
+    const ingredients = extractIngredients(doc);
+    console.log('Extracted ingredients:', ingredients.length);
     
     const instructions = extractInstructions(doc);
-    
-    console.log('Parsed Recipe:', { 
-      title, 
-      image, 
-      ingredientSections,
-      instructions: instructions.length 
-    });
+    console.log('Extracted instructions:', instructions.length);
 
     return {
       title,
