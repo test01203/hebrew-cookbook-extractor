@@ -1,4 +1,3 @@
-
 interface RawRecipeData {
   data: any[];
   status: string;
@@ -7,7 +6,7 @@ interface RawRecipeData {
 const CATEGORIES_MAP: { [key: string]: string[] } = {
   'עוגות': ['עוגה', 'עוגות', 'עוגת', 'טורט'],
   'עוגיות': ['עוגיות', 'עוגיה', 'ביסקוטי'],
-  'לחמים': ['לחם', 'חלה', 'בייגל', 'פיתה'],
+  'לחמים': ['לחם', 'חלה', 'בייגל', 'פ��תה'],
   'קינוחים': ['קינוח', 'מוס', 'פודינג', 'קרם'],
   'מתוקים': ['שוקולד', 'ממתק', 'פרלין', 'טראפל'],
   'מאפים': ['מאפה', 'בורקס', 'פשטידה', 'קיש'],
@@ -25,6 +24,67 @@ const determineCategory = (title: string, content: string): string => {
   }
   
   return 'כללי';
+};
+
+const extractTitle = (doc: Document): string => {
+  // נסה למצוא את הכותרת בכמה דרכים
+  const titleSelectors = [
+    'h1',
+    '.recipe-title',
+    '.wp-post-image[alt]', // מנסה לקחת את ה-alt מהתמונה הראשית
+    'img[class*="featured"][alt]', // תמונות מובלטות עם alt
+    'header img[alt]' // תמונות בהדר עם alt
+  ];
+
+  for (const selector of titleSelectors) {
+    const element = doc.querySelector(selector);
+    if (element) {
+      const text = selector.includes('[alt]') 
+        ? element.getAttribute('alt')
+        : element.textContent;
+      
+      if (text?.trim()) {
+        return text.trim();
+      }
+    }
+  }
+
+  return 'מתכון חדש';
+};
+
+const extractImage = (doc: Document, sourceUrl: string): string => {
+  const imageSelectors = [
+    '.wp-post-image[src]',
+    'img[class*="featured"][src]',
+    'header img[src]',
+    '.featured-media-section img[src]',
+    'img[itemprop="image"]',
+    'article img',
+    '.recipe-image img',
+    '.main-image img'
+  ];
+
+  let imageUrl: string | null = null;
+
+  for (const selector of imageSelectors) {
+    const imgElement = doc.querySelector(selector);
+    if (imgElement) {
+      imageUrl = imgElement.getAttribute('src');
+      if (imageUrl && !imageUrl.includes('placeholder')) {
+        break;
+      }
+    }
+  }
+
+  if (imageUrl && !imageUrl.startsWith('http')) {
+    try {
+      imageUrl = new URL(imageUrl, sourceUrl).href;
+    } catch {
+      imageUrl = '/placeholder.svg';
+    }
+  }
+
+  return imageUrl || '/placeholder.svg';
 };
 
 const extractInstructions = (doc: Document): string[] => {
@@ -123,35 +183,15 @@ export const parseRecipeData = (rawData: RawRecipeData, sourceUrl: string) => {
     const parser = new DOMParser();
     const doc = parser.parseFromString(htmlContent, 'text/html');
     
-    // Extract title
-    const title = doc.querySelector('h1')?.textContent?.trim() || 
-                 doc.querySelector('.recipe-title')?.textContent?.trim() ||
-                 'מתכון חדש';
+    // הוצאת הכותרת והתמונה עם הפונקציות החדשות
+    const title = extractTitle(doc);
+    const image = extractImage(doc, sourceUrl);
 
     // Extract ingredients
     const ingredients = extractIngredients(doc);
 
     // Extract instructions
     const instructions = extractInstructions(doc);
-
-    // Extract featured image
-    let image = doc.querySelector('.featured-media-section img')?.getAttribute('src') ||
-                doc.querySelector('img[itemprop="image"]')?.getAttribute('src') ||
-                doc.querySelector('img.wp-post-image')?.getAttribute('src') ||
-                doc.querySelector('article img, .recipe-image img, .main-image img')?.getAttribute('src');
-    
-    // נקה את כתובת התמונה
-    if (image && !image.startsWith('http')) {
-      try {
-        image = new URL(image, sourceUrl).href;
-      } catch {
-        image = '/placeholder.svg';
-      }
-    }
-    
-    if (!image) {
-      image = '/placeholder.svg';
-    }
 
     // Get YouTube video if exists
     const youtubeUrl = extractYoutubeUrl(doc);
@@ -170,6 +210,8 @@ export const parseRecipeData = (rawData: RawRecipeData, sourceUrl: string) => {
 
     // Extract prep time
     const prepTime = doc.querySelector('[itemprop="totalTime"], .prep-time, .cooking-time')?.textContent?.trim();
+
+    console.log('Parsed Recipe:', { title, image }); // Debug log
 
     return {
       title,
