@@ -6,7 +6,7 @@ interface RawRecipeData {
 const CATEGORIES_MAP: { [key: string]: string[] } = {
   'עוגות': ['עוגה', 'עוגות', 'עוגת', 'טורט'],
   'עוגיות': ['עוגיות', 'עוגיה', 'ביסקוטי'],
-  'לחמים': ['לחם', 'חלה', 'בייגל', 'פ��תה'],
+  'לחמים': ['לחם', 'ח��ה', 'בייגל', 'פ��תה'],
   'קינוחים': ['קינוח', 'מוס', 'פודינג', 'קרם'],
   'מתוקים': ['שוקולד', 'ממתק', 'פרלין', 'טראפל'],
   'מאפים': ['מאפה', 'בורקס', 'פשטידה', 'קיש'],
@@ -27,25 +27,24 @@ const determineCategory = (title: string, content: string): string => {
 };
 
 const extractTitle = (doc: Document): string => {
-  // נסה למצוא את הכותרת בכמה דרכים
-  const titleSelectors = [
-    'h1',
-    '.recipe-title',
-    '.wp-post-image[alt]', // מנסה לקחת את ה-alt מהתמונה הראשית
-    'img[class*="featured"][alt]', // תמונות מובלטות עם alt
-    'header img[alt]' // תמונות בהדר עם alt
+  // חיפוש במספר מקומות אפשריים לכותרת
+  const possibleElements = [
+    ...Array.from(doc.querySelectorAll('h1')),
+    ...Array.from(doc.querySelectorAll('.recipe-title')),
+    ...Array.from(doc.querySelectorAll('.entry-title')),
+    ...Array.from(doc.querySelectorAll('.wp-post-image')),
   ];
 
-  for (const selector of titleSelectors) {
-    const element = doc.querySelector(selector);
-    if (element) {
-      const text = selector.includes('[alt]') 
-        ? element.getAttribute('alt')
-        : element.textContent;
-      
-      if (text?.trim()) {
-        return text.trim();
-      }
+  for (const element of possibleElements) {
+    let text = '';
+    if (element instanceof HTMLImageElement) {
+      text = element.alt;
+    } else {
+      text = element.textContent || '';
+    }
+    
+    if (text?.trim() && text.length > 2) {
+      return text.trim();
     }
   }
 
@@ -53,105 +52,109 @@ const extractTitle = (doc: Document): string => {
 };
 
 const extractImage = (doc: Document, sourceUrl: string): string => {
+  // חיפוש במספר מקומות אפשריים לתמונה
   const imageSelectors = [
-    '.wp-post-image[src]',
-    'img[class*="featured"][src]',
-    'header img[src]',
-    '.featured-media-section img[src]',
-    'img[itemprop="image"]',
-    'article img',
-    '.recipe-image img',
-    '.main-image img'
+    '.attachment-tinysalt_large',
+    '.wp-post-image',
+    '.featured-media-section img',
+    'header img',
+    'article img:first-of-type'
   ];
 
-  let imageUrl: string | null = null;
-
   for (const selector of imageSelectors) {
-    const imgElement = doc.querySelector(selector);
-    if (imgElement) {
-      imageUrl = imgElement.getAttribute('src');
-      if (imageUrl && !imageUrl.includes('placeholder')) {
-        break;
-      }
-    }
-  }
-
-  if (imageUrl && !imageUrl.startsWith('http')) {
-    try {
-      imageUrl = new URL(imageUrl, sourceUrl).href;
-    } catch {
-      imageUrl = '/placeholder.svg';
-    }
-  }
-
-  return imageUrl || '/placeholder.svg';
-};
-
-const extractInstructions = (doc: Document): string[] => {
-  const instructions: string[] = [];
-  
-  // חיפוש בתוך אזורי ההוראות הספציפיים
-  const instructionWrappers = doc.querySelectorAll('.preparation, .instructions, [itemprop="recipeInstructions"], .recipe-instructions, .method, .steps, ol');
-  
-  for (const wrapper of instructionWrappers) {
-    const items = wrapper.querySelectorAll('li, p');
-    let foundValidInstructions = false;
-    
-    items.forEach(item => {
-      const text = item.textContent?.trim();
-      if (text && text.length > 5 && 
-          !text.includes('עמוד הבית') && 
-          !text.includes('קטגוריות') &&
-          !text.includes('חפש') &&
-          !text.includes('תפריט')) {
-        // נקה מספרים מתחילת השורה
-        const cleanText = text.replace(/^\d+[\.\)]\s*/, '');
-        if (!instructions.includes(cleanText)) {
-          instructions.push(cleanText);
-          foundValidInstructions = true;
+    const img = doc.querySelector(selector);
+    if (img && img instanceof HTMLImageElement) {
+      const src = img.src || img.getAttribute('src');
+      if (src && !src.includes('placeholder')) {
+        // נסה לקבל את התמונה הגדולה ביותר מה-srcset אם קיים
+        if (img.srcset) {
+          const srcsetUrls = img.srcset.split(',')
+            .map(s => s.trim().split(' ')[0])
+            .filter(Boolean);
+          if (srcsetUrls.length > 0) {
+            return srcsetUrls[0];
+          }
         }
+        return src;
       }
-    });
-    
-    if (foundValidInstructions) break;
+    }
   }
 
-  return instructions;
+  return '/placeholder.svg';
 };
 
 const extractIngredients = (doc: Document): string[] => {
   const ingredients: string[] = [];
-  const sections = ['מצרכים', 'למשרה', 'לרוטב', 'לציפוי', 'לקישוט', 'למילוי'];
+  let currentSection = '';
   
-  const allParagraphs = doc.querySelectorAll('p[dir="rtl"]');
-  let isInIngredientsSection = false;
+  // עבור על כל הפסקאות בדף
+  const paragraphs = doc.querySelectorAll('p[dir="rtl"]');
   
-  for (const p of allParagraphs) {
-    const text = p.textContent?.trim();
-    if (!text) continue;
+  for (const p of paragraphs) {
+    const text = p.textContent?.trim() || '';
     
     // בדיקה אם זו כותרת של סקציית מצרכים
-    const isPotentialHeader = text.length < 30 && sections.some(section => text.includes(section));
-    
-    if (isPotentialHeader) {
-      isInIngredientsSection = true;
+    if (text.includes('מצרכים') || 
+        text.includes('למשרה') || 
+        text.includes('לרוטב') || 
+        text.includes('לציפוי') || 
+        text.includes('לקישוט') || 
+        text.includes('למילוי')) {
+      currentSection = text;
       continue;
     }
     
-    // אם אנחנו בתוך סקציית מצרכים ויש טקסט משמעותי
-    if (isInIngredientsSection && text.length > 2 && !text.includes('הכנתם?') && !text.includes('איך מכינים')) {
-      if (!text.startsWith('מצרכים') && !sections.includes(text)) {
-        ingredients.push(text);
+    // אם יש טקסט משמעותי והוא לא כותרת של סקציה חדשה
+    if (text && 
+        text.length > 2 && 
+        !text.includes('הכנתם?') && 
+        !text.includes('איך מכינים') &&
+        !text.includes('תייגו אותי')) {
+      
+      // הוסף את שם הסקציה אם זו לא סקציית המצרכים הראשית
+      if (currentSection && !currentSection.includes('מצרכים')) {
+        ingredients.push(`${currentSection}:`);
       }
+      
+      ingredients.push(text);
     }
     
-    // עצירה כשמגיעים לסקציית ההכנה
+    // עצור כשמגיעים להוראות ההכנה
     if (text.includes('איך מכינים')) {
-      isInIngredientsSection = false;
+      break;
     }
   }
   
   return ingredients;
+};
+
+const extractInstructions = (doc: Document): string[] => {
+  const instructions: string[] = [];
+  let foundInstructions = false;
+  
+  // חפש רשימה ממוספרת אחרי "איך מכינים"
+  const lists = doc.querySelectorAll('ol');
+  
+  for (const list of lists) {
+    // בדוק אם לפני הרשימה יש כותרת "איך מכינים"
+    const prevElement = list.previousElementSibling;
+    if (prevElement?.textContent?.includes('איך מכינים')) {
+      const items = list.querySelectorAll('li');
+      items.forEach(item => {
+        const text = item.textContent?.trim();
+        if (text) {
+          instructions.push(text);
+          foundInstructions = true;
+        }
+      });
+      
+      if (foundInstructions) {
+        break;
+      }
+    }
+  }
+  
+  return instructions;
 };
 
 const extractYoutubeUrl = (doc: Document): string | undefined => {
@@ -183,35 +186,27 @@ export const parseRecipeData = (rawData: RawRecipeData, sourceUrl: string) => {
     const parser = new DOMParser();
     const doc = parser.parseFromString(htmlContent, 'text/html');
     
-    // הוצאת הכותרת והתמונה עם הפונקציות החדשות
     const title = extractTitle(doc);
     const image = extractImage(doc, sourceUrl);
-
-    // Extract ingredients
     const ingredients = extractIngredients(doc);
-
-    // Extract instructions
     const instructions = extractInstructions(doc);
+    
+    console.log('Parsed Recipe:', { 
+      title, 
+      image, 
+      ingredients: ingredients.length,
+      instructions: instructions.length 
+    });
 
-    // Get YouTube video if exists
-    const youtubeUrl = extractYoutubeUrl(doc);
-
-    // Get source and credits
-    const source = new URL(sourceUrl).hostname.replace('www.', '');
     const { author, credits } = getCredits(doc);
 
-    // Extract categories from the source
     const siteCategories = Array.from(doc.querySelectorAll('.categories a, .breadcrumbs a'))
       .map(el => el.textContent?.trim())
       .filter(Boolean) as string[];
 
-    // Determine recipe category
     const category = determineCategory(title, htmlContent);
 
-    // Extract prep time
     const prepTime = doc.querySelector('[itemprop="totalTime"], .prep-time, .cooking-time')?.textContent?.trim();
-
-    console.log('Parsed Recipe:', { title, image }); // Debug log
 
     return {
       title,
@@ -220,9 +215,9 @@ export const parseRecipeData = (rawData: RawRecipeData, sourceUrl: string) => {
       image,
       category,
       prepTime,
-      source,
+      source: new URL(sourceUrl).hostname.replace('www.', ''),
       sourceUrl,
-      youtubeUrl,
+      youtubeUrl: extractYoutubeUrl(doc),
       author,
       credits,
       siteCategories
