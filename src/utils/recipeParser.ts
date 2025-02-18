@@ -11,7 +11,7 @@ const CATEGORIES_MAP: { [key: string]: string[] } = {
   'קינוחים': ['קינוח', 'מוס', 'פודינג', 'קרם'],
   'מתוקים': ['שוקולד', 'ממתק', 'פרלין', 'טראפל'],
   'מאפים': ['מאפה', 'בורקס', 'פשטידה', 'קיש'],
-  'ארוחות': ['ארוחה', 'תבשיל', 'מרק', 'פסטה', 'אורז'],
+  'ארוחות': ['ארוחה', 'תבשיל', 'מרק', 'פסטה', 'אורז', 'סלט'],
   'סלטים': ['סלט', 'ירקות'],
 };
 
@@ -56,55 +56,42 @@ const extractInstructions = (doc: Document): string[] => {
     if (foundValidInstructions) break;
   }
 
-  // אם לא מצאנו הוראות, חפש פסקאות עם מספרים
-  if (instructions.length === 0) {
-    const allParagraphs = Array.from(doc.querySelectorAll('p'));
-    const numberedParagraphs = allParagraphs.filter(p => {
-      const text = p.textContent?.trim() || '';
-      return text.length > 5 && 
-             /^\d+[\.\)]\s/.test(text) && 
-             !text.includes('עמוד הבית') && 
-             !text.includes('קטגוריות') &&
-             !text.includes('חפש') &&
-             !text.includes('תפריט');
-    });
-
-    numberedParagraphs.forEach(p => {
-      const text = p.textContent?.trim();
-      if (text) {
-        const cleanText = text.replace(/^\d+[\.\)]\s*/, '');
-        if (!instructions.includes(cleanText)) {
-          instructions.push(cleanText);
-        }
-      }
-    });
-  }
-
   return instructions;
 };
 
 const extractIngredients = (doc: Document): string[] => {
-  const ingredients = new Set<string>();
+  const ingredients: string[] = [];
+  const sections = ['מצרכים', 'למשרה', 'לרוטב', 'לציפוי', 'לקישוט', 'למילוי'];
   
-  const selectors = [
-    '.ingredient',
-    '.ingredients li',
-    '[itemprop="recipeIngredient"]',
-    '.recipe-ingredients li',
-    '.ingredients-section li'
-  ];
-
-  for (const selector of selectors) {
-    const elements = doc.querySelectorAll(selector);
-    elements.forEach(el => {
-      const text = el.textContent?.trim();
-      if (text && text.length > 2) {
-        ingredients.add(text);
+  const allParagraphs = doc.querySelectorAll('p[dir="rtl"]');
+  let isInIngredientsSection = false;
+  
+  for (const p of allParagraphs) {
+    const text = p.textContent?.trim();
+    if (!text) continue;
+    
+    // בדיקה אם זו כותרת של סקציית מצרכים
+    const isPotentialHeader = text.length < 30 && sections.some(section => text.includes(section));
+    
+    if (isPotentialHeader) {
+      isInIngredientsSection = true;
+      continue;
+    }
+    
+    // אם אנחנו בתוך סקציית מצרכים ויש טקסט משמעותי
+    if (isInIngredientsSection && text.length > 2 && !text.includes('הכנתם?') && !text.includes('איך מכינים')) {
+      if (!text.startsWith('מצרכים') && !sections.includes(text)) {
+        ingredients.push(text);
       }
-    });
+    }
+    
+    // עצירה כשמגיעים לסקציית ההכנה
+    if (text.includes('איך מכינים')) {
+      isInIngredientsSection = false;
+    }
   }
-
-  return Array.from(ingredients);
+  
+  return ingredients;
 };
 
 const extractYoutubeUrl = (doc: Document): string | undefined => {
@@ -141,15 +128,16 @@ export const parseRecipeData = (rawData: RawRecipeData, sourceUrl: string) => {
                  doc.querySelector('.recipe-title')?.textContent?.trim() ||
                  'מתכון חדש';
 
-    // Extract ingredients without duplicates
-    const ingredients = Array.from(new Set(extractIngredients(doc)));
+    // Extract ingredients
+    const ingredients = extractIngredients(doc);
 
     // Extract instructions
     const instructions = extractInstructions(doc);
-    console.log('Extracted instructions:', instructions); // Debug log
 
-    // Extract image with fallback options
-    let image = doc.querySelector('img[itemprop="image"]')?.getAttribute('src') ||
+    // Extract featured image
+    let image = doc.querySelector('.featured-media-section img')?.getAttribute('src') ||
+                doc.querySelector('img[itemprop="image"]')?.getAttribute('src') ||
+                doc.querySelector('img.wp-post-image')?.getAttribute('src') ||
                 doc.querySelector('article img, .recipe-image img, .main-image img')?.getAttribute('src');
     
     // נקה את כתובת התמונה
