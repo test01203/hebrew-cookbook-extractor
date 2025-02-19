@@ -12,40 +12,64 @@ interface TiktokVideo {
 
 const extractTiktokContent = (doc: Document, sourceUrl: string): TiktokVideo | null => {
   try {
-    const scripts = doc.querySelectorAll('script[type="application/json"]');
-    for (const script of scripts) {
-      const content = script.textContent;
-      if (content) {
-        const data = JSON.parse(content);
-        if (data?.props?.pageProps?.itemInfo?.itemStruct) {
-          const videoData = data.props.pageProps.itemInfo.itemStruct;
-          const videoId = videoData.id;
-          // נוסיף תמיכה בפורמט החדש של TikTok
-          const embedUrl = videoId.startsWith('v') 
-            ? `https://www.tiktok.com/embed/v2/${videoId}`
-            : `https://www.tiktok.com/embed/${videoId}`;
-            
-          return {
-            title: videoData.desc || 'מתכון טיקטוק',
-            description: videoData.desc || '',
-            embedUrl
-          };
+    // קודם ננסה למצוא את מזהה הסרטון מה-URL
+    const videoIdMatch = sourceUrl.match(/video\/(\d+)/);
+    if (!videoIdMatch) {
+      console.error('Could not extract video ID from URL');
+      return null;
+    }
+
+    const videoId = videoIdMatch[1];
+    const embedUrl = `https://www.tiktok.com/embed/${videoId}`;
+
+    // חיפוש המידע במספר מיקומים אפשריים
+    let title = '';
+    let description = '';
+
+    // חיפוש בתגיות meta
+    const metaTitle = doc.querySelector('meta[property="og:title"]');
+    const metaDescription = doc.querySelector('meta[property="og:description"]');
+    
+    if (metaTitle) {
+      title = metaTitle.getAttribute('content') || '';
+    }
+    
+    if (metaDescription) {
+      description = metaDescription.getAttribute('content') || '';
+    }
+
+    // אם לא מצאנו בתגיות meta, ננסה למצוא בתוכן הדף
+    if (!title || !description) {
+      const scripts = doc.querySelectorAll('script[type="application/json"]');
+      for (const script of scripts) {
+        const content = script.textContent;
+        if (content) {
+          try {
+            const data = JSON.parse(content);
+            if (data?.props?.pageProps?.itemInfo?.itemStruct) {
+              const videoData = data.props.pageProps.itemInfo.itemStruct;
+              if (!title) title = videoData.desc || '';
+              if (!description) description = videoData.desc || '';
+              break;
+            }
+          } catch (e) {
+            console.error('Error parsing JSON from script tag:', e);
+          }
         }
       }
     }
-    
-    // אם לא מצאנו בפורמט הרגיל, ננסה לחלץ מה-URL
-    const videoIdMatch = sourceUrl.match(/video\/(\d+)/);
-    if (videoIdMatch) {
-      const videoId = videoIdMatch[1];
-      return {
-        title: doc.title || 'מתכון טיקטוק',
-        description: '',
-        embedUrl: `https://www.tiktok.com/embed/v2/${videoId}`
-      };
-    }
-    
-    return null;
+
+    // אם עדיין לא מצאנו כותרת או תיאור, נשתמש בברירת מחדל
+    if (!title) title = 'מתכון טיקטוק';
+    if (!description) description = '';
+
+    console.log('Extracted TikTok content:', { videoId, title, description });
+
+    return {
+      title,
+      description,
+      embedUrl
+    };
   } catch (error) {
     console.error('Error extracting TikTok content:', error);
     return null;
@@ -58,29 +82,50 @@ const extractTiktokRecipeContent = (description: string): { ingredients: string[
   const instructions: string[] = [];
   let currentSection: 'ingredients' | 'instructions' | null = null;
 
+  // קודם ננסה למצוא סימנים מובהקים של חלקי המתכון
   for (const line of lines) {
-    if (line.includes('מצרכים') || line.includes('חומרים')) {
+    const lowerLine = line.toLowerCase();
+    
+    // זיהוי כותרות של חלקי המתכון
+    if (lowerLine.includes('מצרכים') || 
+        lowerLine.includes('חומרים') ||
+        lowerLine.includes('רכיבים')) {
       currentSection = 'ingredients';
       continue;
-    } else if (line.includes('אופן הכנה') || line.includes('הוראות הכנה')) {
+    } 
+    
+    if (lowerLine.includes('אופן הכנה') || 
+        lowerLine.includes('הוראות הכנה') ||
+        lowerLine.includes('הכנה:')) {
       currentSection = 'instructions';
       continue;
     }
 
-    if (currentSection === 'ingredients') {
+    // הוספת השורה לחלק המתאים
+    if (currentSection === 'ingredients' && line.length > 1) {
       ingredients.push(line);
-    } else if (currentSection === 'instructions') {
+    } else if (currentSection === 'instructions' && line.length > 1) {
       instructions.push(line);
     }
   }
 
-  // אם אין חלוקה ברורה, ננסה לזהות לפי תבנית
+  // אם לא מצאנו חלוקה ברורה, ננסה לזהות לפי תבנית
   if (ingredients.length === 0 && instructions.length === 0) {
+    let foundList = false;
+    
     for (const line of lines) {
-      if (line.match(/^[\d.-]/) || line.match(/^[א-ת]+ *:/)) {
+      // מזהה שורות שנראות כמו רכיבים
+      if (line.match(/^[-•*]|\d+\.|\d+\s*(גרם|כפית|כף|כוס|מ"ל|ק"ג)/)) {
         ingredients.push(line);
-      } else if (line.length > 10) {
+        foundList = true;
+      }
+      // שורות ארוכות יותר שמגיעות אחרי רשימת הרכיבים הן כנראה הוראות
+      else if (foundList && line.length > 10) {
         instructions.push(line);
+      }
+      // שורות קצרות בהתחלה הן כנראה רכיבים
+      else if (!foundList && line.length > 1) {
+        ingredients.push(line);
       }
     }
   }
