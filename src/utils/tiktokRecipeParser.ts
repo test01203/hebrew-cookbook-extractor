@@ -10,7 +10,7 @@ interface TiktokVideo {
   embedUrl: string;
 }
 
-const extractTiktokContent = (doc: Document): TiktokVideo | null => {
+const extractTiktokContent = (doc: Document, sourceUrl: string): TiktokVideo | null => {
   try {
     const scripts = doc.querySelectorAll('script[type="application/json"]');
     for (const script of scripts) {
@@ -35,7 +35,7 @@ const extractTiktokContent = (doc: Document): TiktokVideo | null => {
     }
     
     // אם לא מצאנו בפורמט הרגיל, ננסה לחלץ מה-URL
-    const videoIdMatch = doc.URL.match(/video\/(\d+)/);
+    const videoIdMatch = sourceUrl.match(/video\/(\d+)/);
     if (videoIdMatch) {
       const videoId = videoIdMatch[1];
       return {
@@ -93,9 +93,8 @@ export const parseTiktokRecipe = async (rawData: TiktokRawData, sourceUrl: strin
     const htmlContent = rawData.data[0]?.html || '';
     const parser = new DOMParser();
     const doc = parser.parseFromString(htmlContent, 'text/html');
-    doc.URL = sourceUrl; // נוסיף את ה-URL המקורי למקרה שנצטרך לחלץ ממנו את מזהה הסרטון
     
-    const tiktokContent = extractTiktokContent(doc);
+    const tiktokContent = extractTiktokContent(doc, sourceUrl);
     if (!tiktokContent) {
       throw new Error('Could not extract TikTok content');
     }
@@ -113,7 +112,7 @@ export const parseTiktokRecipe = async (rawData: TiktokRawData, sourceUrl: strin
       title: tiktokContent.title,
       ingredients,
       instructions,
-      image: '/placeholder.svg', // TikTok doesn't provide a static thumbnail we can easily extract
+      image: '/placeholder.svg',
       category: 'טיקטוק',
       source: 'TikTok',
       sourceUrl,
