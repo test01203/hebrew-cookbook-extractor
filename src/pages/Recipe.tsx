@@ -128,15 +128,27 @@ export default function RecipePage() {
             </div>
           </div>
 
-          <div className="relative aspect-[16/9] w-full overflow-hidden rounded-lg">
-            <img
-              src={recipe.image || "/placeholder.svg"}
-              alt={recipe.title}
-              className="object-cover w-full h-full"
-            />
-          </div>
+          {recipe.tiktokUrl ? (
+            <div className="relative aspect-[9/16] w-full max-w-md mx-auto overflow-hidden rounded-lg">
+              <iframe
+                src={recipe.tiktokUrl}
+                className="absolute inset-0 w-full h-full"
+                style={{ border: 'none' }}
+                allowFullScreen
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              />
+            </div>
+          ) : (
+            <div className="relative aspect-[16/9] w-full overflow-hidden rounded-lg">
+              <img
+                src={recipe.image || "/placeholder.svg"}
+                alt={recipe.title}
+                className="object-cover w-full h-full"
+              />
+            </div>
+          )}
 
-          {recipe.youtubeUrl && (
+          {recipe.youtubeUrl && !recipe.tiktokUrl && (
             <div className="relative aspect-[16/9] w-full overflow-hidden rounded-lg">
               <iframe
                 src={recipe.youtubeUrl}
