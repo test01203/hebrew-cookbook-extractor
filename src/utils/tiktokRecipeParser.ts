@@ -12,7 +12,6 @@ interface TiktokVideo {
 
 const extractTiktokContent = (doc: Document): TiktokVideo | null => {
   try {
-    // מנסה למצוא את הכותרת ותיאור הסרטון
     const scripts = doc.querySelectorAll('script[type="application/json"]');
     for (const script of scripts) {
       const content = script.textContent;
@@ -20,14 +19,32 @@ const extractTiktokContent = (doc: Document): TiktokVideo | null => {
         const data = JSON.parse(content);
         if (data?.props?.pageProps?.itemInfo?.itemStruct) {
           const videoData = data.props.pageProps.itemInfo.itemStruct;
+          const videoId = videoData.id;
+          // נוסיף תמיכה בפורמט החדש של TikTok
+          const embedUrl = videoId.startsWith('v') 
+            ? `https://www.tiktok.com/embed/v2/${videoId}`
+            : `https://www.tiktok.com/embed/${videoId}`;
+            
           return {
             title: videoData.desc || 'מתכון טיקטוק',
             description: videoData.desc || '',
-            embedUrl: `https://www.tiktok.com/embed/${videoData.id}`
+            embedUrl
           };
         }
       }
     }
+    
+    // אם לא מצאנו בפורמט הרגיל, ננסה לחלץ מה-URL
+    const videoIdMatch = doc.URL.match(/video\/(\d+)/);
+    if (videoIdMatch) {
+      const videoId = videoIdMatch[1];
+      return {
+        title: doc.title || 'מתכון טיקטוק',
+        description: '',
+        embedUrl: `https://www.tiktok.com/embed/v2/${videoId}`
+      };
+    }
+    
     return null;
   } catch (error) {
     console.error('Error extracting TikTok content:', error);
@@ -76,6 +93,7 @@ export const parseTiktokRecipe = async (rawData: TiktokRawData, sourceUrl: strin
     const htmlContent = rawData.data[0]?.html || '';
     const parser = new DOMParser();
     const doc = parser.parseFromString(htmlContent, 'text/html');
+    doc.URL = sourceUrl; // נוסיף את ה-URL המקורי למקרה שנצטרך לחלץ ממנו את מזהה הסרטון
     
     const tiktokContent = extractTiktokContent(doc);
     if (!tiktokContent) {
