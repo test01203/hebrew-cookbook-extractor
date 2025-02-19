@@ -12,64 +12,47 @@ interface TiktokVideo {
 
 const extractTiktokContent = (doc: Document, sourceUrl: string): TiktokVideo | null => {
   try {
-    // קודם ננסה למצוא את מזהה הסרטון מה-URL
-    const videoIdMatch = sourceUrl.match(/video\/(\d+)/);
-    if (!videoIdMatch) {
-      console.error('Could not extract video ID from URL');
-      return null;
-    }
-
-    const videoId = videoIdMatch[1];
-    const embedUrl = `https://www.tiktok.com/embed/${videoId}`;
-
-    // חיפוש המידע במספר מיקומים אפשריים
-    let title = '';
-    let description = '';
-
-    // חיפוש בתגיות meta
-    const metaTitle = doc.querySelector('meta[property="og:title"]');
-    const metaDescription = doc.querySelector('meta[property="og:description"]');
-    
-    if (metaTitle) {
-      title = metaTitle.getAttribute('content') || '';
-    }
-    
-    if (metaDescription) {
-      description = metaDescription.getAttribute('content') || '';
-    }
-
-    // אם לא מצאנו בתגיות meta, ננסה למצוא בתוכן הדף
-    if (!title || !description) {
-      const scripts = doc.querySelectorAll('script[type="application/json"]');
-      for (const script of scripts) {
-        const content = script.textContent;
-        if (content) {
-          try {
-            const data = JSON.parse(content);
-            if (data?.props?.pageProps?.itemInfo?.itemStruct) {
-              const videoData = data.props.pageProps.itemInfo.itemStruct;
-              if (!title) title = videoData.desc || '';
-              if (!description) description = videoData.desc || '';
-              break;
-            }
-          } catch (e) {
-            console.error('Error parsing JSON from script tag:', e);
-          }
+    // חיפוש נתוני TikTok מהסקריפט המוטמע
+    const stateElement = doc.querySelector('#SIGI_STATE');
+    if (stateElement?.textContent) {
+      try {
+        const data = JSON.parse(stateElement.textContent);
+        const itemKey = Object.keys(data.ItemModule)[0];
+        const videoData = data.ItemModule[itemKey];
+        
+        if (videoData) {
+          const videoId = videoData.id;
+          const embedUrl = `https://www.tiktok.com/embed/${videoId}`;
+          
+          return {
+            title: videoData.desc || 'מתכון טיקטוק',
+            description: videoData.desc || '',
+            embedUrl
+          };
         }
+      } catch (e) {
+        console.error('Error parsing SIGI_STATE:', e);
       }
     }
 
-    // אם עדיין לא מצאנו כותרת או תיאור, נשתמש בברירת מחדל
-    if (!title) title = 'מתכון טיקטוק';
-    if (!description) description = '';
-
-    console.log('Extracted TikTok content:', { videoId, title, description });
-
-    return {
-      title,
-      description,
-      embedUrl
-    };
+    // אם לא הצלחנו למצוא את הנתונים מה-SIGI_STATE, ננסה דרך ה-URL
+    const videoIdMatch = sourceUrl.match(/video\/(\d+)/);
+    if (videoIdMatch) {
+      const videoId = videoIdMatch[1];
+      const embedUrl = `https://www.tiktok.com/embed/${videoId}`;
+      
+      // חיפוש בתגיות meta
+      const metaTitle = doc.querySelector('meta[property="og:title"]');
+      const metaDescription = doc.querySelector('meta[property="og:description"]');
+      
+      return {
+        title: metaTitle?.getAttribute('content') || 'מתכון טיקטוק',
+        description: metaDescription?.getAttribute('content') || '',
+        embedUrl
+      };
+    }
+    
+    return null;
   } catch (error) {
     console.error('Error extracting TikTok content:', error);
     return null;
