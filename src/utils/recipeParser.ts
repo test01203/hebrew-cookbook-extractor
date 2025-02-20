@@ -158,7 +158,22 @@ const extractTitle = (doc: Document): string => {
 };
 
 const extractImage = (doc: Document): string => {
-  // נסה למצוא את התמונה הראשית
+  // נסה למצוא תמונה בתוך div.img-wrap
+  const imgWrapImg = doc.querySelector('.img-wrap img');
+  if (imgWrapImg instanceof HTMLImageElement) {
+    // אם יש srcset, קח את התמונה הגדולה ביותר
+    if (imgWrapImg.srcset) {
+      const srcsetUrls = imgWrapImg.srcset.split(',')
+        .map(s => s.trim().split(' ')[0])
+        .filter(Boolean);
+      if (srcsetUrls.length > 0) {
+        return srcsetUrls[0];
+      }
+    }
+    return imgWrapImg.src;
+  }
+
+  // אם לא נמצאה תמונה ב-img-wrap, נסה למצוא את התמונה הראשית
   const wpImage = doc.querySelector('.wp-post-image, .attachment-tinysalt_large');
   if (wpImage instanceof HTMLImageElement) {
     // אם יש srcset, קח את התמונה הגדולה ביותר
