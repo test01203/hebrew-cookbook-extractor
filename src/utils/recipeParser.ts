@@ -1,4 +1,3 @@
-
 interface RawRecipeData {
   data: any[];
   status: string;
@@ -7,7 +6,7 @@ interface RawRecipeData {
 const CATEGORIES_MAP: { [key: string]: string[] } = {
   'עוגות': ['עוגה', 'עוגות', 'עוגת', 'טורט'],
   'עוגיות': ['עוגיות', 'עוגיה', 'ביסקוטי'],
-  'לחמים': ['לחם', 'חלה', 'בייגל', 'פיתה'],
+  'לחמים': ['לחם', 'ח��ה', 'בייגל', 'פיתה'],
   'קינוחים': ['קינוח', 'מוס', 'פודינג', 'קרם'],
   'מתוקים': ['שוקולד', 'ממתק', 'פרלין', 'טראפל'],
   'מאפים': ['מאפה', 'בורקס', 'פשטידה', 'קיש'],
@@ -168,9 +167,39 @@ const extractInstructions = (doc: Document): string[] => {
         instructions.push(text);
       }
     });
+    
+    if (instructions.length > 0) {
+      return instructions;
+    }
   }
   
-  // אם לא נמצאו הוראות במבנה המובנה, נסה למצוא רשימה ממוספרת אחרי "איך מכינים"
+  // נסה למצוא הוראות בתוך post-content
+  const postContent = doc.querySelector('.post-content');
+  if (postContent) {
+    let foundInstructions = false;
+    const elements = postContent.children;
+    
+    for (const element of Array.from(elements)) {
+      const text = element.textContent?.trim() || '';
+      
+      // התחל לאסוף הוראות אחרי שמוצאים כותרת שמתאימה
+      if (text.match(/^(אופן|הוראות) ההכנה:?$/i) || text.includes('איך מכינים')) {
+        foundInstructions = true;
+        continue;
+      }
+      
+      // אם מצאנו הוראות וזה פסקה או פריט ברשימה, הוסף אותו
+      if (foundInstructions && 
+          (element instanceof HTMLParagraphElement || element instanceof HTMLLIElement) &&
+          text &&
+          !text.includes('youtube.com') &&
+          !text.includes('לסירטון')) {
+        instructions.push(text);
+      }
+    }
+  }
+  
+  // גיבוי: נסה למצוא רשימה ממוספרת אחרי "איך מכינים"
   if (instructions.length === 0) {
     const lists = doc.querySelectorAll('ol');
     for (const list of lists) {
@@ -192,6 +221,12 @@ const extractInstructions = (doc: Document): string[] => {
 };
 
 const extractTitle = (doc: Document): string => {
+  // נסה למצוא את הכותרת מתגית og:title
+  const ogTitle = doc.querySelector('meta[property="og:title"]');
+  if (ogTitle instanceof HTMLMetaElement && ogTitle.content) {
+    return ogTitle.content.trim();
+  }
+
   // נסה למצוא את הכותרת מתמונה ראשית
   const mainImage = doc.querySelector('.wp-post-image, .attachment-tinysalt_large');
   if (mainImage instanceof HTMLImageElement && mainImage.alt) {
@@ -265,7 +300,21 @@ const extractImage = (doc: Document): string => {
 const extractYoutubeUrl = (doc: Document): string | undefined => {
   const youtubeIframe = doc.querySelector('iframe[src*="youtube.com"]');
   if (youtubeIframe) {
-    return youtubeIframe.getAttribute('src') || undefined;
+    const src = youtubeIframe.getAttribute('src');
+    if (src) {
+      // הסר פרמטרים מיותרים מה-URL
+      const url = new URL(src);
+      if (url.hostname.includes('youtube.com')) {
+        // שמור רק את המזהה של הסרטון
+        const videoId = url.pathname.split('/').pop() || 
+                       url.searchParams.get('v') ||
+                       '';
+        if (videoId) {
+          return `https://www.youtube.com/embed/${videoId}`;
+        }
+      }
+      return src;
+    }
   }
 
   const youtubeLink = doc.querySelector('a[href*="youtube.com"]');
