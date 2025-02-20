@@ -38,54 +38,112 @@ const extractIngredients = (doc: Document): string[] => {
     title: 'מצרכים',
     items: []
   };
-  
-  // מצא את כל הפסקאות בעברית
-  const paragraphs = Array.from(doc.querySelectorAll('p')).filter(p => {
-    const text = p.textContent?.trim() || '';
-    return text.match(/[\u0590-\u05FF]/) && text.length > 0;
-  });
-  
-  let inIngredientsSection = false;
-  
-  for (const p of paragraphs) {
-    const text = p.textContent?.trim() || '';
-    
-    // בדוק אם זו כותרת חדשה
-    if (text.match(/^(מצרכים|למשרה|לרוטב|לציפוי|לקישוט|למילוי)/)) {
-      if (currentSection.items.length > 0) {
-        sections.push({...currentSection});
+
+  // נסה למצוא את חלק המצרכים המובנה
+  const ingredientsDiv = doc.querySelector('.ingredients');
+  if (ingredientsDiv) {
+    // מצא את כותרת הכמות אם קיימת
+    const dishAmount = ingredientsDiv.querySelector('.dish-amount h2');
+    if (dishAmount?.textContent) {
+      currentSection.title = dishAmount.textContent.trim();
+    }
+
+    // מצא את כל רשימות המצרכים
+    const listTitles = ingredientsDiv.querySelectorAll('.list-title');
+    const ingLists = ingredientsDiv.querySelectorAll('.ing-list');
+
+    if (listTitles.length > 0) {
+      // אם יש תתי-כותרות, עבור על כל אחת מהן
+      listTitles.forEach((titleElement, index) => {
+        if (currentSection.items.length > 0) {
+          sections.push({...currentSection});
+        }
+
+        const title = titleElement.textContent?.trim() || 'מצרכים';
+        currentSection = {
+          title,
+          items: []
+        };
+
+        // מצא את רשימת המצרכים המתאימה
+        const list = ingLists[index];
+        if (list) {
+          const items = Array.from(list.querySelectorAll('li'))
+            .map(li => li.textContent?.trim())
+            .filter((text): text is string => text !== null && text.length > 0);
+          currentSection.items.push(...items);
+        }
+      });
+    } else {
+      // אם אין תתי-כותרות, אסוף את כל המצרכים מכל הרשימות
+      ingLists.forEach(list => {
+        const items = Array.from(list.querySelectorAll('li'))
+          .map(li => li.textContent?.trim())
+          .filter((text): text is string => text !== null && text.length > 0);
+        currentSection.items.push(...items);
+      });
+    }
+
+    if (currentSection.items.length > 0) {
+      sections.push({...currentSection});
+    }
+
+    // הוסף את גודל התבנית אם קיים
+    const dishSize = ingredientsDiv.querySelector('.dish-size');
+    if (dishSize?.textContent) {
+      const sizeText = dishSize.textContent.trim();
+      if (sizeText) {
+        sections.push({
+          title: 'גודל תבנית',
+          items: [sizeText]
+        });
       }
-      currentSection = {
-        title: text,
-        items: []
-      };
-      inIngredientsSection = true;
-      continue;
     }
+  } else {
+    // אם לא נמצא מבנה מובנה, השתמש בלוגיקה הקודמת
+    const paragraphs = Array.from(doc.querySelectorAll('p')).filter(p => {
+      const text = p.textContent?.trim() || '';
+      return text.match(/[\u0590-\u05FF]/) && text.length > 0;
+    });
     
-    // אם יש טקסט משמעותי והוא לא כותרת או טקסט מיוחד
-    if (inIngredientsSection && 
-        text && 
-        text.length > 2 && 
-        !text.includes('הכנתם?') && 
-        !text.includes('איך מכינים') &&
-        !text.includes('תייגו אותי')) {
-      currentSection.items.push(text);
-    }
+    let inIngredientsSection = false;
     
-    // עצור כשמגיעים להוראות ההכנה
-    if (text.includes('איך מכינים')) {
-      inIngredientsSection = false;
-      if (currentSection.items.length > 0) {
-        sections.push({...currentSection});
+    for (const p of paragraphs) {
+      const text = p.textContent?.trim() || '';
+      
+      if (text.match(/^(מצרכים|למשרה|לרוטב|לציפוי|לקישוט|למילוי)/)) {
+        if (currentSection.items.length > 0) {
+          sections.push({...currentSection});
+        }
+        currentSection = {
+          title: text,
+          items: []
+        };
+        inIngredientsSection = true;
+        continue;
       }
-      break;
+      
+      if (inIngredientsSection && 
+          text && 
+          text.length > 2 && 
+          !text.includes('הכנתם?') && 
+          !text.includes('איך מכינים') &&
+          !text.includes('תייגו אותי')) {
+        currentSection.items.push(text);
+      }
+      
+      if (text.includes('איך מכינים')) {
+        inIngredientsSection = false;
+        if (currentSection.items.length > 0) {
+          sections.push({...currentSection});
+        }
+        break;
+      }
     }
-  }
-  
-  // הוסף את הסקציה האחרונה אם יש בה פריטים
-  if (currentSection.items.length > 0) {
-    sections.push({...currentSection});
+    
+    if (currentSection.items.length > 0) {
+      sections.push({...currentSection});
+    }
   }
 
   // שטח את כל המצרכים לרשימה אחת עם כותרות
@@ -99,25 +157,32 @@ const extractIngredients = (doc: Document): string[] => {
 
 const extractInstructions = (doc: Document): string[] => {
   const instructions: string[] = [];
-  let foundInstructions = false;
   
-  // חפש רשימה ממוספרת אחרי "איך מכינים"
-  const lists = doc.querySelectorAll('ol');
+  // נסה למצוא את חלק ההוראות המובנה
+  const instructionsDiv = doc.querySelector('.instructions');
+  if (instructionsDiv) {
+    const items = instructionsDiv.querySelectorAll('.inst-list li');
+    items.forEach(item => {
+      const text = item.textContent?.trim();
+      if (text) {
+        instructions.push(text);
+      }
+    });
+  }
   
-  for (const list of lists) {
-    // בדוק אם לפני הרשימה יש כותרת "איך מכינים"
-    const prevElement = list.previousElementSibling;
-    if (prevElement?.textContent?.includes('איך מכינים')) {
-      const items = list.querySelectorAll('li');
-      items.forEach(item => {
-        const text = item.textContent?.trim();
-        if (text) {
-          instructions.push(text);
-          foundInstructions = true;
-        }
-      });
-      
-      if (foundInstructions) {
+  // אם לא נמצאו הוראות במבנה המובנה, נסה למצוא רשימה ממוספרת אחרי "איך מכינים"
+  if (instructions.length === 0) {
+    const lists = doc.querySelectorAll('ol');
+    for (const list of lists) {
+      const prevElement = list.previousElementSibling;
+      if (prevElement?.textContent?.includes('איך מכינים')) {
+        const items = list.querySelectorAll('li');
+        items.forEach(item => {
+          const text = item.textContent?.trim();
+          if (text) {
+            instructions.push(text);
+          }
+        });
         break;
       }
     }
