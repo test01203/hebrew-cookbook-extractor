@@ -10,7 +10,6 @@ export interface Recipe {
   ingredients: string[];
   instructions: string[];
   youtubeUrl?: string;
-  tiktokUrl?: string;
   author?: string;
   credits?: string;
   siteCategories: string[];

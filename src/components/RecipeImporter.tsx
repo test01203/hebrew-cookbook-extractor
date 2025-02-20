@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { FirecrawlService } from "@/utils/FirecrawlService";
 import { parseRecipeData } from "@/utils/recipeParser";
-import { parseTiktokRecipe } from "@/utils/tiktokRecipeParser";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 
@@ -18,7 +17,6 @@ interface ImportedRecipe {
   prepTime?: string;
   source: string;
   sourceUrl: string;
-  tiktokUrl?: string;
 }
 
 export function RecipeImporter({ onImport }: { onImport: (recipe: ImportedRecipe) => void }) {
@@ -36,11 +34,7 @@ export function RecipeImporter({ onImport }: { onImport: (recipe: ImportedRecipe
       const result = await FirecrawlService.crawlWebsite(url);
       
       if (result.success && result.data) {
-        const isTiktok = url.includes('tiktok.com');
-        const recipeData = isTiktok 
-          ? await parseTiktokRecipe(result.data, url)
-          : parseRecipeData(result.data, url);
-
+        const recipeData = parseRecipeData(result.data, url);
         onImport(recipeData);
         toast({
           title: "מתכון יובא בהצלחה",
@@ -73,13 +67,13 @@ export function RecipeImporter({ onImport }: { onImport: (recipe: ImportedRecipe
         <div className="space-y-2">
           <h3 className="text-lg font-semibold">ייבא מתכון חדש</h3>
           <p className="text-sm text-muted-foreground">
-            הכנס קישור למתכון שברצונך לייבא (כולל מתכוני טיקטוק)
+            הכנס קישור למתכון שברצונך לייבא
           </p>
         </div>
         <div className="flex gap-2">
           <Input
             type="url"
-            placeholder="https://example.com/recipe או https://tiktok.com/..."
+            placeholder="https://example.com/recipe"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             className="flex-1"

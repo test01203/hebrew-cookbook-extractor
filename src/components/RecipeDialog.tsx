@@ -1,3 +1,4 @@
+
 import {
   Dialog,
   DialogContent,
@@ -74,20 +75,11 @@ export function RecipeDialog({ recipe, open, onClose, onDelete, onEdit }: Recipe
           </DialogHeader>
           
           <div className="flex-none relative aspect-[16/9] w-full overflow-hidden rounded-lg mt-4">
-            {recipe.tiktokUrl ? (
-              <iframe
-                src={recipe.tiktokUrl}
-                className="absolute inset-0 w-full h-full"
-                allowFullScreen
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              />
-            ) : (
-              <img
-                src={recipe.image || "/placeholder.svg"}
-                alt={recipe.title}
-                className="object-cover w-full h-full"
-              />
-            )}
+            <img
+              src={recipe.image || "/placeholder.svg"}
+              alt={recipe.title}
+              className="object-cover w-full h-full"
+            />
           </div>
 
           <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
