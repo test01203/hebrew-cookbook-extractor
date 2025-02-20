@@ -15,7 +15,7 @@ interface YoastData {
 const CATEGORIES_MAP: { [key: string]: string[] } = {
   'עוגות': ['עוגה', 'עוגות', 'עוגת', 'טורט'],
   'עוגיות': ['עוגיות', 'עוגיה', 'ביסקוטי'],
-  'לחמים': ['לחם', 'ח��ה', 'בייגל', 'פיתה'],
+  'לחמים': ['לחם', 'חלה', 'בייגל', 'פיתה'],
   'קינוחים': ['קינוח', 'מוס', 'פודינג', 'קרם'],
   'מתוקים': ['שוקולד', 'ממתק', 'פרלין', 'טראפל'],
   'מאפים': ['מאפה', 'בורקס', 'פשטידה', 'קיש'],
@@ -73,7 +73,7 @@ const parseDescriptionToRecipe = (description: string): { ingredients: string[],
   let instructions: string[] = [];
 
   if (parts.length === 2) {
-    // חלק את המaskets לפי שורות
+    // חלק את המצרכים לפי שורות
     ingredients = parts[0]
       .replace(/מצרכים\s*:/, '')
       .split(/\n|,/)
@@ -90,6 +90,107 @@ const parseDescriptionToRecipe = (description: string): { ingredients: string[],
   return { ingredients, instructions };
 };
 
+const cleanTitle = (title: string): string => {
+  // הסר האשטאגים ותגיות
+  return title
+    .replace(/#\w+/g, '') // הסר האשטאגים באנגלית
+    .replace(/#[\u0590-\u05FF\w]+/g, '') // הסר האשטאגים בעברית
+    .replace(/- YouTube/i, '') // הסר אזכור של יוטיוב
+    .split('|')[0] // קח רק את החלק הראשון אם יש מפריד |
+    .trim()
+    .replace(/\s+/g, ' '); // הסר רווחים מיותרים
+};
+
+const extractTitle = (doc: Document): string => {
+  // נסה למצוא כותרת מ-h1 בתוך post-header
+  const postHeaderH1 = doc.querySelector('.post-header h1.post-title');
+  if (postHeaderH1?.textContent) {
+    return cleanTitle(postHeaderH1.textContent.trim());
+  }
+
+  // נסה למצוא את הכותרת מתגית title
+  const titleTag = doc.querySelector('title');
+  if (titleTag?.textContent) {
+    return cleanTitle(titleTag.textContent.trim());
+  }
+
+  // נסה למצוא את הכותרת מתגית og:title
+  const ogTitle = doc.querySelector('meta[property="og:title"]');
+  if (ogTitle instanceof HTMLMetaElement && ogTitle.content) {
+    return cleanTitle(ogTitle.content.trim());
+  }
+
+  // נסה למצוא כותרת מ-h1 כללי
+  const h1 = doc.querySelector('h1');
+  if (h1?.textContent) {
+    return cleanTitle(h1.textContent.trim());
+  }
+
+  return 'מתכון חדש';
+};
+
+const extractIngredientsFromContent = (content: Element): string[] => {
+  const ingredients: string[] = [];
+  const paragraphs = content.querySelectorAll('p');
+  let foundIngredients = false;
+  
+  for (const p of paragraphs) {
+    const text = p.textContent?.trim() || '';
+    
+    // זיהוי תחילת רשימת המצרכים
+    if (text.includes('מצרכים :') || text.includes('מצרכים:')) {
+      foundIngredients = true;
+      // הסר את הכותרת "מצרכים:" ופצל לפי שורות
+      const items = text.replace(/מצרכים\s*:/, '')
+        .split(/\n|<br\s*\/>/)
+        .map(item => item.trim())
+        .filter(item => item.length > 0);
+      ingredients.push(...items);
+      continue;
+    }
+    
+    // המשך לאסוף מצרכים עד שמגיעים לאופן ההכנה
+    if (foundIngredients && !text.includes('אופן ההכנה')) {
+      const items = text.split(/\n|<br\s*\/>/)
+        .map(item => item.trim())
+        .filter(item => item.length > 0 && !item.includes('מצרכים'));
+      ingredients.push(...items);
+    }
+    
+    // עצור כשמגיעים לאופן ההכנה
+    if (text.includes('אופן ההכנה')) {
+      break;
+    }
+  }
+  
+  return ingredients;
+};
+
+const extractInstructionsFromContent = (content: Element): string[] => {
+  const instructions: string[] = [];
+  const paragraphs = content.querySelectorAll('p');
+  let foundInstructions = false;
+  
+  for (const p of paragraphs) {
+    const text = p.textContent?.trim() || '';
+    
+    if (text.includes('אופן ההכנה:') || text.includes('אופן כנה:')) {
+      foundInstructions = true;
+      continue;
+    }
+    
+    if (foundInstructions && text && !text.includes('לסירטון') && !text.includes('youtube.com')) {
+      // פצל לפי שורות או מספרים
+      const steps = text.split(/\n|<br\s*\/>|\d+[-\)]\s*/)
+        .map(step => step.trim())
+        .filter(step => step.length > 0);
+      instructions.push(...steps);
+    }
+  }
+  
+  return instructions;
+};
+
 const extractIngredients = (doc: Document): string[] => {
   const sections: IngredientSection[] = [];
   let currentSection: IngredientSection = {
@@ -97,7 +198,7 @@ const extractIngredients = (doc: Document): string[] => {
     items: []
   };
 
-  // נסה למצוא את המaskets מתיאור ה-meta
+  // נסה למצוא את המצרכים מתיאור ה-meta
   const metaDescription = doc.querySelector('meta[property="og:description"]')?.getAttribute('content');
   if (metaDescription) {
     const parsed = parseDescriptionToRecipe(metaDescription);
@@ -106,7 +207,16 @@ const extractIngredients = (doc: Document): string[] => {
     }
   }
 
-  // נסה למצוא את חלק המaskets המובנה
+  // נסה למצוא את המצרכים בתוך post-content
+  const postContent = doc.querySelector('.post-content');
+  if (postContent) {
+    const contentIngredients = extractIngredientsFromContent(postContent);
+    if (contentIngredients.length > 0) {
+      return contentIngredients;
+    }
+  }
+
+  // נסה למצוא את חלק המצרכים המובנה
   const ingredientsDiv = doc.querySelector('.ingredients');
   if (ingredientsDiv) {
     // מצא את כותרת הכמות אם קיימת
@@ -115,7 +225,7 @@ const extractIngredients = (doc: Document): string[] => {
       currentSection.title = dishAmount.textContent.trim();
     }
 
-    // מצא את כל רשימות המaskets
+    // מצא את כל רשימות המצרכים
     const listTitles = ingredientsDiv.querySelectorAll('.list-title');
     const ingLists = ingredientsDiv.querySelectorAll('.ing-list');
 
@@ -132,7 +242,7 @@ const extractIngredients = (doc: Document): string[] => {
           items: []
         };
 
-        // מצא את רשימת המaskets המתאימה
+        // מצא את רשימת המצרכים המתאימה
         const list = ingLists[index];
         if (list) {
           const items = Array.from(list.querySelectorAll('li'))
@@ -142,7 +252,7 @@ const extractIngredients = (doc: Document): string[] => {
         }
       });
     } else {
-      // אם אין תתי-כותרות, אסוף את כל המaskets מכל הרשימות
+      // אם אין תתי-כותרות, אסוף את כל המצרכים מכל הרשימות
       ingLists.forEach(list => {
         const items = Array.from(list.querySelectorAll('li'))
           .map(li => li.textContent?.trim())
@@ -213,7 +323,7 @@ const extractIngredients = (doc: Document): string[] => {
     }
   }
 
-  // שטח את כל המaskets לרשימה אחת עם כותרות
+  // שטח את כל המצרכים לרשימה אחת עם כותרות
   return sections.flatMap(section => {
     if (section.title === 'מצרכים') {
       return section.items;
@@ -223,8 +333,6 @@ const extractIngredients = (doc: Document): string[] => {
 };
 
 const extractInstructions = (doc: Document): string[] => {
-  const instructions: string[] = [];
-  
   // נסה למצוא הוראות הכנה מתיאור ה-meta
   const metaDescription = doc.querySelector('meta[property="og:description"]')?.getAttribute('content');
   if (metaDescription) {
@@ -234,8 +342,32 @@ const extractInstructions = (doc: Document): string[] => {
     }
   }
 
-  // נסה למצוא הוראות בתוך post-content
+  // נסה למצוא הוראות הכנה בתוך post-content
   const postContent = doc.querySelector('.post-content');
+  if (postContent) {
+    const contentInstructions = extractInstructionsFromContent(postContent);
+    if (contentInstructions.length > 0) {
+      return contentInstructions;
+    }
+  }
+
+  // נסה למצוא את חלק ההוראות המובנה
+  const instructionsDiv = doc.querySelector('.instructions');
+  if (instructionsDiv) {
+    const items = instructionsDiv.querySelectorAll('.inst-list li');
+    const instructions: string[] = [];
+    items.forEach(item => {
+      const text = item.textContent?.trim();
+      if (text) {
+        instructions.push(text);
+      }
+    });
+    if (instructions.length > 0) {
+      return instructions;
+    }
+  }
+  
+  // נסה למצוא הוראות בתוך post-content
   if (postContent) {
     let foundInstructions = false;
     const elements = postContent.children;
@@ -277,42 +409,8 @@ const extractInstructions = (doc: Document): string[] => {
       }
     }
   }
-  
+
   return instructions;
-};
-
-const extractTitle = (doc: Document): string => {
-  // נסה למצוא את הכותרת מתגית title
-  const titleTag = doc.querySelector('title');
-  if (titleTag?.textContent) {
-    return titleTag.textContent.trim();
-  }
-
-  // נסה למצוא את הכותרת מתגית og:title
-  const ogTitle = doc.querySelector('meta[property="og:title"]');
-  if (ogTitle instanceof HTMLMetaElement && ogTitle.content) {
-    return ogTitle.content.trim();
-  }
-
-  // נסה למצוא כותרת מ-h1
-  const h1 = doc.querySelector('h1');
-  if (h1?.textContent) {
-    const h1Text = h1.textContent.trim();
-    if (h1Text && h1Text.length > 2) {
-      return h1Text;
-    }
-  }
-
-  // נסה למצוא כותרת מתמונה ראשית בסקציית המדיה
-  const featuredImage = doc.querySelector('.featured-media-section img');
-  if (featuredImage instanceof HTMLImageElement && featuredImage.alt) {
-    const featuredAlt = featuredImage.alt.trim();
-    if (featuredAlt && featuredAlt.length > 2) {
-      return featuredAlt;
-    }
-  }
-
-  return 'מתכון חדש';
 };
 
 const extractImage = (doc: Document): string => {
