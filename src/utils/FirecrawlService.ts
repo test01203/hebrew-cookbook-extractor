@@ -36,21 +36,8 @@ export class FirecrawlService {
         limit: 1,
         scrapeOptions: {
           formats: ['html'],
-          customScripts: [
-            // מוסיף סקריפט מותאם לקבלת נתוני TikTok
-            `
-            const videoData = document.querySelector('#SIGI_STATE');
-            if (videoData) {
-              try {
-                const data = JSON.parse(videoData.textContent);
-                return { tiktokData: data };
-              } catch (e) {
-                console.error('Error parsing TikTok data:', e);
-              }
-            }
-            return null;
-            `
-          ]
+          waitUntil: 'networkidle0',
+          selectors: ['#SIGI_STATE', 'meta[property="og:title"]', 'meta[property="og:description"]']
         }
       }) as CrawlResponse;
 
